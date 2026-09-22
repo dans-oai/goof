@@ -33,7 +33,7 @@ jobs:
           mode: standard
           model: gpt-5.6-luna
           effort: low
-          fail-on-severity: none
+          fail-on-severity: medium
           verbose: "true"
           summary: "true"
           annotations: "true"
