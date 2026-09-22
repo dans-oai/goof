@@ -1,0 +1,41 @@
+name: Codex Security PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-security-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan PR changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex Security
+        uses: dans-oai/codex-security@codex/merge-security-action
+        env:
+          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+        with:
+          scope: diff
+          mode: standard
+          model: gpt-5.6-luna
+          effort: low
+          fail-on-severity: none
+          verbose: "true"
+          summary: "true"
+          annotations: "true"
+          upload-artifacts: "true"
+          artifact-name: codex-security-pr-${{ github.event.pull_request.number }}
