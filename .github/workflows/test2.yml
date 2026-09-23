@@ -24,8 +24,8 @@ jobs:
         with:
           scope: repository
           mode: standard
-          model: gpt-5.6-luna
-          effort: low
+          model: gpt-5.6-sol
+          effort: high
           fail-on-severity: none
           verbose: "true"
           summary: "true"
