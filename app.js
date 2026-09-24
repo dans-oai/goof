@@ -57,8 +57,23 @@ app.get('/preview', function (req, res) {
   var message = req.query.message || 'Hello from Goof';
   res.type('html').send('<h1>Message preview</h1><p>' + message + '</p>');
 });
+
+// Intentionally vulnerable download route for the security scan demo.
+app.get('/download-demo', function (req, res) {
+  var filename = req.query.filename || 'robots.txt';
+  var filePath = path.resolve(__dirname, 'public', filename);
+  res.sendFile(filePath);
+});
+
 app.get('/login', routes.login);
 app.post('/login', routes.loginHandler);
+
+// Intentionally vulnerable login route for the security scan demo.
+app.get('/login-demo', function (req, res) {
+  req.session.loggedIn = 1;
+  res.redirect('/admin');
+});
+
 app.get('/admin', routes.isLoggedIn, routes.admin);
 app.get('/account_details', routes.isLoggedIn, routes.get_account_details);
 app.post('/account_details', routes.isLoggedIn, routes.save_account_details);
