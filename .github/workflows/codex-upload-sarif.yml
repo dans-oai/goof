@@ -1,45 +1,101 @@
-name: Codex Security Manual with SARIF
+name: Scan study worker
+run-name: "${{ inputs.study_id }} / ${{ inputs.trial_id }} / ${{ inputs.model }} / ${{ inputs.scope }}"
 
 on:
   workflow_dispatch:
+    inputs:
+      study_id:
+        type: string
+        required: true
+      trial_id:
+        type: string
+        required: true
+      scope:
+        type: choice
+        options: [diff, repository]
+        required: true
+      model:
+        type: choice
+        options: [gpt-6-luna, gpt-6-sol, gpt-6-astra]
+        required: true
 
 permissions:
   contents: read
-  actions: read
-  security-events: write
 
 jobs:
   scan:
-    name: Scan repository
     runs-on: ubuntu-24.04
-
+    timeout-minutes: 45
     steps:
-      - name: Check out selected revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-
-      - name: Run Codex Security
+      - name: Prepare observation files
+        env:
+          STUDY_ID: ${{ inputs.study_id }}
+          TRIAL_ID: ${{ inputs.trial_id }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/study-output"
+          cp .github/scan-study/capture.cjs "$RUNNER_TEMP/study-capture.cjs"
+          git diff --name-status HEAD^ HEAD > "$RUNNER_TEMP/study-output/target-diff.txt"
+          git rev-parse HEAD HEAD^ > "$RUNNER_TEMP/study-output/target-revisions.txt"
+      - name: Run pinned Codex Security Action
         id: security
+        timeout-minutes: 40
+        continue-on-error: true
         uses: dans-oai/codex-security@5818b78846a91c776b3d6a83d05270e0cf435548
         with:
-          scope: repository
+          scope: ${{ inputs.scope }}
+          diff-base: ${{ inputs.scope == 'diff' && format('{0}^', github.sha) || '' }}
           mode: standard
-          model: gpt-6-astra
-          effort: high
+          model: ${{ inputs.model }}
+          effort: low
+          max-cost: ${{ inputs.model == 'gpt-6-astra' && '30' || '' }}
           fail-on-severity: none
-          upload-artifacts: "true"
-          artifact-name: codex-security-manual
+          verbose: 'true'
+          summary: 'true'
+          annotations: 'false'
+          upload-artifacts: 'true'
+          artifact-name: reports-${{ inputs.study_id }}-${{ inputs.trial_id }}
+          retention-days: '30'
         env:
           OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
-
-      - name: Upload SARIF to GitHub Code Scanning
-        if: ${{ always() && steps.security.outputs.sarif-upload-ready == 'true' }}
-        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+          NODE_OPTIONS: --require ${{ runner.temp }}/study-capture.cjs
+          STUDY_OUTPUT_DIR: ${{ runner.temp }}/study-output
+      - name: Collect trial metrics and failed report diagnostics
+        if: always()
+        env:
+          STUDY_OUTPUT_DIR: ${{ runner.temp }}/study-output
+          STUDY_ID: ${{ inputs.study_id }}
+          STUDY_TRIAL_ID: ${{ inputs.trial_id }}
+          STUDY_MODEL: ${{ inputs.model }}
+          STUDY_SCOPE: ${{ inputs.scope }}
+          STUDY_ACTION_SHA: 5818b78846a91c776b3d6a83d05270e0cf435548
+          STUDY_HEAD_SHA: ${{ github.sha }}
+          STUDY_CLI_VERSION: '0.1.31'
+          ACTION_OUTPUTS: ${{ toJSON(steps.security.outputs) }}
+          ACTION_OUTCOME: ${{ steps.security.outcome }}
+          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scan-study/metrics.py
+      - name: Preserve metrics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          sarif_file: ${{ steps.security.outputs.sarif-path }}
-          sha: ${{ steps.security.outputs.scanned-sha }}
-          ref: ${{ steps.security.outputs.analysis-ref }}
-          category: codex-security-repository
-          wait-for-processing: "true"
+          name: metrics-${{ inputs.study_id }}-${{ inputs.trial_id }}
+          path: ${{ runner.temp }}/study-output/metric.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Preserve diagnostic files
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: diagnostics-${{ inputs.study_id }}-${{ inputs.trial_id }}
+          path: ${{ runner.temp }}/study-output
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve failed Action outcome
+        if: ${{ always() && steps.security.outcome != 'success' }}
+        run: exit 1

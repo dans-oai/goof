@@ -1,34 +1,51 @@
-name: Test Codex Security
+name: Finite scan comparison
+run-name: "Scan comparison / ${{ inputs.study_id }}"
 
 on:
   workflow_dispatch:
+    inputs:
+      study_id:
+        type: string
+        required: true
 
 permissions:
   contents: read
+  actions: write
+
+concurrency:
+  group: scan-comparison-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  scan:
-    name: Scan Goof
-    runs-on: ubuntu-latest
-
+  coordinate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
     steps:
-      - name: Check out Goof
-        uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-
-      - name: Run Codex Security
-        uses: dans-oai/codex-security@codex/merge-security-action
+      - name: Run finite comparison
         env:
-          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          STUDY_REPO: ${{ github.repository }}
+          STUDY_BRANCH: ${{ github.ref_name }}
+          STUDY_HEAD_SHA: ${{ github.sha }}
+          STUDY_ID: ${{ inputs.study_id }}
+          STUDY_OUTPUT: ${{ runner.temp }}/study-controller
+          STUDY_MODELS_JSON: '["gpt-6-luna","gpt-6-sol","gpt-6-astra"]'
+          MAX_TRIALS: '60'
+          MAX_ACTIVE: '2'
+          LAUNCH_WINDOW_SECONDS: '18000'
+          BUDGET_USD: '500'
+          BUDGET_HEADROOM_USD: '50'
+          PER_SCAN_RESERVE_USD: '30'
+        run: python3 .github/scan-study/controller.py
+      - name: Preserve complete experiment ledger and downloads
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          scope: repository
-          mode: standard
-          model: gpt-5.6-sol
-          effort: high
-          fail-on-severity: none
-          verbose: "true"
-          summary: "true"
-          annotations: "true"
-          upload-artifacts: "true"
-          artifact-name: codex-security-test
+          name: study-${{ inputs.study_id }}
+          path: ${{ runner.temp }}/study-controller
+          if-no-files-found: error
+          retention-days: 30
