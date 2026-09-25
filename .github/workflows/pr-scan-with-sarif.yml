@@ -1,0 +1,52 @@
+name: Codex Security PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+concurrency:
+  group: codex-security-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan PR changes
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex Security
+        id: security
+        uses: dans-oai/codex-security@5818b78846a91c776b3d6a83d05270e0cf435548
+        with:
+          scope: diff
+          mode: standard
+          model: gpt-6-astra
+          effort: low
+          fail-on-severity: none
+          upload-artifacts: "true"
+          artifact-name: codex-security-pr-${{ github.event.pull_request.number }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: ${{ always() && steps.security.outputs.sarif-upload-ready == 'true' }}
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: ${{ steps.security.outputs.sarif-path }}
+          sha: ${{ steps.security.outputs.scanned-sha }}
+          ref: ${{ steps.security.outputs.analysis-ref }}
+          category: codex-security-pr
+          wait-for-processing: "true"
