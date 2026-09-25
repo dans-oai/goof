@@ -34,7 +34,7 @@ jobs:
           STUDY_ID: ${{ inputs.study_id }}
           STUDY_OUTPUT: ${{ runner.temp }}/study-controller
           STUDY_MODELS_JSON: '["gpt-6-luna","gpt-6-sol","gpt-6-astra"]'
-          MAX_TRIALS: '60'
+          MAX_TRIALS: '20'
           MAX_ACTIVE: '2'
           LAUNCH_WINDOW_SECONDS: '18000'
           BUDGET_USD: '500'

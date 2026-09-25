@@ -45,7 +45,7 @@ jobs:
         id: security
         timeout-minutes: 40
         continue-on-error: true
-        uses: dans-oai/codex-security@5818b78846a91c776b3d6a83d05270e0cf435548
+        uses: dans-oai/codex-security@4950c8c6424104ced990f6e3921ba4a807340f15
         with:
           scope: ${{ inputs.scope }}
           diff-base: ${{ inputs.scope == 'diff' && format('{0}^', github.sha) || '' }}
@@ -72,7 +72,7 @@ jobs:
           STUDY_TRIAL_ID: ${{ inputs.trial_id }}
           STUDY_MODEL: ${{ inputs.model }}
           STUDY_SCOPE: ${{ inputs.scope }}
-          STUDY_ACTION_SHA: 5818b78846a91c776b3d6a83d05270e0cf435548
+          STUDY_ACTION_SHA: 4950c8c6424104ced990f6e3921ba4a807340f15
           STUDY_HEAD_SHA: ${{ github.sha }}
           STUDY_CLI_VERSION: '0.1.31'
           ACTION_OUTPUTS: ${{ toJSON(steps.security.outputs) }}
