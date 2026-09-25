@@ -1,0 +1,45 @@
+name: Codex Security Manual with SARIF
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Scan repository
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Run Codex Security
+        id: security
+        uses: dans-oai/codex-security@5818b78846a91c776b3d6a83d05270e0cf435548
+        with:
+          scope: repository
+          mode: standard
+          model: gpt-6-astra
+          effort: high
+          fail-on-severity: none
+          upload-artifacts: "true"
+          artifact-name: codex-security-manual
+        env:
+          OPENAI_API_KEY: ${{ secrets.CODEX_SECURITY_API_KEY }}
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: ${{ always() && steps.security.outputs.sarif-upload-ready == 'true' }}
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: ${{ steps.security.outputs.sarif-path }}
+          sha: ${{ steps.security.outputs.scanned-sha }}
+          ref: ${{ steps.security.outputs.analysis-ref }}
+          category: codex-security-repository
+          wait-for-processing: "true"
