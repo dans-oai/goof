@@ -51,6 +51,12 @@ app.use(fileUpload());
 // Routes
 app.use(routes.current_user);
 app.get('/', routes.index);
+
+// Intentionally vulnerable preview for the security scan demo.
+app.get('/preview', function (req, res) {
+  var message = req.query.message || 'Hello from Goof';
+  res.type('html').send('<h1>Message preview</h1><p>' + message + '</p>');
+});
 app.get('/login', routes.login);
 app.post('/login', routes.loginHandler);
 app.get('/admin', routes.isLoggedIn, routes.admin);
